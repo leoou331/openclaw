@@ -257,6 +257,11 @@
       "title": "Session Send",
       "detailKeys": ["label", "sessionKey", "agentId", "timeoutSeconds"]
     },
+    "sessions_close": {
+      "emoji": "🧹",
+      "title": "Session Close",
+      "detailKeys": ["label", "sessionKey", "agentId"]
+    },
     "sessions_spawn": {
       "emoji": "🧑‍🔧",
       "title": "Sub-agent",

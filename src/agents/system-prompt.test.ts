@@ -254,14 +254,17 @@ describe("buildAgentSystemPrompt", () => {
   it("guides harness requests to ACP thread-bound spawns", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
-      toolNames: ["sessions_spawn", "subagents", "agents_list", "exec"],
+      toolNames: ["sessions_spawn", "sessions_close", "subagents", "agents_list", "exec"],
     });
 
     expect(prompt).toContain(
       'For requests like "do this in codex/claude code/gemini", treat it as ACP harness intent',
     );
     expect(prompt).toContain(
-      'On Discord, default ACP harness requests to thread-bound persistent sessions (`thread: true`, `mode: "session"`)',
+      'On Discord, use `thread: true` so ACP work stays in a bound thread. Prefer `mode: "run"` for one-shot work; use `mode: "session"` only when you expect follow-up steering in that thread.',
+    );
+    expect(prompt).toContain(
+      'If you create a persistent ACP session (`mode: "session"`), call `sessions_close` when the work is done and no more follow-up is expected.',
     );
     expect(prompt).toContain(
       "do not route ACP harness requests through `subagents`/`agents_list` or local PTY exec flows",
@@ -280,6 +283,7 @@ describe("buildAgentSystemPrompt", () => {
     );
     expect(prompt).not.toContain('runtime="acp" requires `agentId`');
     expect(prompt).not.toContain("not ACP harness ids");
+    expect(prompt).not.toContain("sessions_close");
     expect(prompt).toContain("- sessions_spawn: Spawn an isolated sub-agent session");
     expect(prompt).toContain("- agents_list: List OpenClaw agent ids allowed for sessions_spawn");
   });

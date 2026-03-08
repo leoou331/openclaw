@@ -304,6 +304,7 @@ describe("createOpenClawCodingTools", () => {
       "sessions_list",
       "sessions_history",
       "sessions_send",
+      "sessions_close",
       "sessions_spawn",
       "subagents",
       "session_status",
@@ -327,6 +328,7 @@ describe("createOpenClawCodingTools", () => {
     expect(names.has("sessions_list")).toBe(false);
     expect(names.has("sessions_history")).toBe(false);
     expect(names.has("sessions_send")).toBe(false);
+    expect(names.has("sessions_close")).toBe(false);
     expect(names.has("sessions_spawn")).toBe(false);
     // Explicit subagent orchestration tool remains available (list/steer/kill with safeguards).
     expect(names.has("subagents")).toBe(true);
@@ -376,6 +378,7 @@ describe("createOpenClawCodingTools", () => {
     expect(names.has("sessions_spawn")).toBe(false);
     expect(names.has("sessions_list")).toBe(false);
     expect(names.has("sessions_history")).toBe(false);
+    expect(names.has("sessions_close")).toBe(false);
     expect(names.has("subagents")).toBe(true);
   });
   it("supports allow-only sub-agent tool policy", () => {
@@ -403,6 +406,7 @@ describe("createOpenClawCodingTools", () => {
     const names = new Set(tools.map((tool) => tool.name));
     expect(names.has("message")).toBe(true);
     expect(names.has("sessions_send")).toBe(true);
+    expect(names.has("sessions_close")).toBe(true);
     expect(names.has("sessions_spawn")).toBe(false);
     expect(names.has("exec")).toBe(false);
     expect(names.has("browser")).toBe(false);

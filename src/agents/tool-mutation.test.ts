@@ -18,6 +18,10 @@ describe("tool mutation helpers", () => {
     ).toBe(true);
   });
 
+  it("treats sessions_close as mutating", () => {
+    expect(isMutatingToolCall("sessions_close", { sessionKey: "agent:codex:acp:1" })).toBe(true);
+  });
+
   it("builds stable fingerprints for mutating calls and omits read-only calls", () => {
     const writeFingerprint = buildToolActionFingerprint(
       "write",
@@ -67,6 +71,7 @@ describe("tool mutation helpers", () => {
 
   it("keeps legacy name-only mutating heuristics for payload fallback", () => {
     expect(isLikelyMutatingToolName("sessions_send")).toBe(true);
+    expect(isLikelyMutatingToolName("sessions_close")).toBe(true);
     expect(isLikelyMutatingToolName("browser_actions")).toBe(true);
     expect(isLikelyMutatingToolName("message_slack")).toBe(true);
     expect(isLikelyMutatingToolName("browser")).toBe(false);

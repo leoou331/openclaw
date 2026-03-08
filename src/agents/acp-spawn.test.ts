@@ -274,6 +274,66 @@ describe("spawnAcpDirect", () => {
     );
   });
 
+  it("defaults thread-bound ACP spawns to run/oneshot when mode is omitted", async () => {
+    const result = await spawnAcpDirect(
+      {
+        task: "Investigate flaky tests",
+        agentId: "codex",
+        thread: true,
+      },
+      {
+        agentSessionKey: "agent:main:main",
+        agentChannel: "discord",
+        agentAccountId: "default",
+        agentTo: "channel:parent-channel",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.mode).toBe("run");
+    expect(hoisted.initializeSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "codex",
+        mode: "oneshot",
+      }),
+    );
+  });
+
+  it("allows config to restore thread-bound ACP session mode by default", async () => {
+    hoisted.state.cfg = {
+      ...hoisted.state.cfg,
+      acp: {
+        enabled: true,
+        backend: "acpx",
+        allowedAgents: ["codex"],
+        defaultThreadSpawnMode: "session",
+      },
+    };
+
+    const result = await spawnAcpDirect(
+      {
+        task: "Investigate flaky tests",
+        agentId: "codex",
+        thread: true,
+      },
+      {
+        agentSessionKey: "agent:main:main",
+        agentChannel: "discord",
+        agentAccountId: "default",
+        agentTo: "channel:parent-channel",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.mode).toBe("session");
+    expect(hoisted.initializeSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "codex",
+        mode: "persistent",
+      }),
+    );
+  });
+
   it("includes cwd in ACP thread intro banner when provided at spawn time", async () => {
     const result = await spawnAcpDirect(
       {

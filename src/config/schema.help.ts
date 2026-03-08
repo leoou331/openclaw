@@ -162,6 +162,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Default ACP runtime backend id (for example: acpx). Must match a registered ACP runtime plugin backend.",
   "acp.defaultAgent":
     "Fallback ACP target agent id used when ACP spawns do not specify an explicit target.",
+  "acp.defaultThreadSpawnMode":
+    'Default ACP spawn mode to use when `thread=true` and `mode` is omitted. Use "run" for one-shot thread-bound work or "session" for persistent follow-up threads.',
   "acp.allowedAgents":
     "Allowlist of ACP target agent ids permitted for ACP runtime sessions. Empty means no additional allowlist restriction.",
   "acp.maxConcurrentSessions":

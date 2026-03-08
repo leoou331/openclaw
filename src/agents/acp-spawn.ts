@@ -73,15 +73,26 @@ type PreparedAcpThreadBinding = {
   conversationId: string;
 };
 
+function resolveConfiguredThreadSpawnMode(cfg: OpenClawConfig): SpawnAcpMode | undefined {
+  const raw =
+    typeof cfg.acp?.defaultThreadSpawnMode === "string"
+      ? cfg.acp.defaultThreadSpawnMode.trim().toLowerCase()
+      : "";
+  return raw === "run" || raw === "session" ? raw : undefined;
+}
+
 function resolveSpawnMode(params: {
+  cfg: OpenClawConfig;
   requestedMode?: SpawnAcpMode;
   threadRequested: boolean;
 }): SpawnAcpMode {
   if (params.requestedMode === "run" || params.requestedMode === "session") {
     return params.requestedMode;
   }
-  // Thread-bound spawns should default to persistent sessions.
-  return params.threadRequested ? "session" : "run";
+  if (!params.threadRequested) {
+    return "run";
+  }
+  return resolveConfiguredThreadSpawnMode(params.cfg) ?? "run";
 }
 
 function resolveAcpSessionMode(mode: SpawnAcpMode): AcpRuntimeSessionMode {
@@ -231,6 +242,7 @@ export async function spawnAcpDirect(
 
   const requestThreadBinding = params.thread === true;
   const spawnMode = resolveSpawnMode({
+    cfg,
     requestedMode: params.mode,
     threadRequested: requestThreadBinding,
   });

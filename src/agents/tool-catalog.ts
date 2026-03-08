@@ -138,6 +138,14 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInOpenClawGroup: true,
   },
   {
+    id: "sessions_close",
+    label: "sessions_close",
+    description: "Close ACP session",
+    sectionId: "sessions",
+    profiles: ["coding", "messaging"],
+    includeInOpenClawGroup: true,
+  },
+  {
     id: "sessions_spawn",
     label: "sessions_spawn",
     description: "Spawn sub-agent",

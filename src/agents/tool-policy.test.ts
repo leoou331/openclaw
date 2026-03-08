@@ -67,6 +67,7 @@ describe("tool-policy", () => {
     expect(group).toContain("message");
     expect(group).toContain("subagents");
     expect(group).toContain("session_status");
+    expect(group).toContain("sessions_close");
     expect(group).toContain("tts");
   });
 

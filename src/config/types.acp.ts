@@ -24,6 +24,8 @@ export type AcpConfig = {
   /** Backend id registered by ACP runtime plugin (for example: acpx). */
   backend?: string;
   defaultAgent?: string;
+  /** Default ACP mode to use when thread=true and mode is omitted. */
+  defaultThreadSpawnMode?: "run" | "session";
   allowedAgents?: string[];
   maxConcurrentSessions?: number;
   stream?: AcpStreamConfig;

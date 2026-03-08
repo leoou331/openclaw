@@ -259,8 +259,9 @@ export function buildAgentSystemPrompt(params: {
     sessions_list: "List other sessions (incl. sub-agents) with filters/last",
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
+    sessions_close: "Close an ACP harness session and release its runtime/thread binding",
     sessions_spawn: acpEnabled
-      ? 'Spawn an isolated sub-agent or ACP coding session (runtime="acp" requires `agentId` unless `acp.defaultAgent` is configured; ACP harness ids follow acp.allowedAgents, not agents_list)'
+      ? 'Spawn an isolated sub-agent or ACP coding session (runtime="acp" requires `agentId` unless `acp.defaultAgent` is configured; ACP harness ids follow acp.allowedAgents, not agents_list; pass `mode` explicitly when thread lifecycle matters)'
       : "Spawn an isolated sub-agent session",
     subagents: "List, steer, or kill sub-agent runs for this requester session",
     session_status:
@@ -290,6 +291,8 @@ export function buildAgentSystemPrompt(params: {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "sessions_close",
+    "sessions_spawn",
     "subagents",
     "session_status",
     "image",
@@ -310,6 +313,7 @@ export function buildAgentSystemPrompt(params: {
 
   const normalizedTools = canonicalToolNames.map((tool) => tool.toLowerCase());
   const availableTools = new Set(normalizedTools);
+  const hasSessionsClose = availableTools.has("sessions_close");
   const hasSessionsSpawn = availableTools.has("sessions_spawn");
   const externalToolSummaries = new Map<string, string>();
   for (const [key, value] of Object.entries(params.toolSummaries ?? {})) {
@@ -438,6 +442,8 @@ export function buildAgentSystemPrompt(params: {
           "- sessions_list: list sessions",
           "- sessions_history: fetch session history",
           "- sessions_send: send to another session",
+          "- sessions_close: close an ACP harness session",
+          "- sessions_spawn: spawn an isolated sub-agent or ACP session",
           "- subagents: list/steer/kill sub-agent runs",
           '- session_status: show usage/time/model state and answer "what model are we using?"',
         ].join("\n"),
@@ -447,7 +453,12 @@ export function buildAgentSystemPrompt(params: {
     ...(hasSessionsSpawn && acpEnabled
       ? [
           'For requests like "do this in codex/claude code/gemini", treat it as ACP harness intent and call `sessions_spawn` with `runtime: "acp"`.',
-          'On Discord, default ACP harness requests to thread-bound persistent sessions (`thread: true`, `mode: "session"`) unless the user asks otherwise.',
+          'On Discord, use `thread: true` so ACP work stays in a bound thread. Prefer `mode: "run"` for one-shot work; use `mode: "session"` only when you expect follow-up steering in that thread.',
+          ...(hasSessionsClose
+            ? [
+                'If you create a persistent ACP session (`mode: "session"`), call `sessions_close` when the work is done and no more follow-up is expected.',
+              ]
+            : []),
           "Set `agentId` explicitly unless `acp.defaultAgent` is configured, and do not route ACP harness requests through `subagents`/`agents_list` or local PTY exec flows.",
         ]
       : []),

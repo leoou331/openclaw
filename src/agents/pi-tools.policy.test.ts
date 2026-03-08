@@ -64,6 +64,11 @@ describe("resolveSubagentToolPolicy depth awareness", () => {
     expect(isToolAllowedByPolicyName("cron", policy)).toBe(false);
   });
 
+  it("denies sessions_close for subagents by default", () => {
+    const policy = resolveSubagentToolPolicy(baseCfg, 1);
+    expect(isToolAllowedByPolicyName("sessions_close", policy)).toBe(false);
+  });
+
   it("applies subagent tools.allow to re-enable default-denied tools", () => {
     const cfg = {
       agents: { defaults: { subagents: { maxSpawnDepth: 2 } } },

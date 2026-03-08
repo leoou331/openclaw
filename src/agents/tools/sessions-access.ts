@@ -14,7 +14,7 @@ export type AgentToAgentPolicy = {
   isAllowed: (requesterAgentId: string, targetAgentId: string) => boolean;
 };
 
-export type SessionAccessAction = "history" | "send" | "list";
+export type SessionAccessAction = "history" | "send" | "list" | "close";
 
 export type SessionAccessResult =
   | { allowed: true }
@@ -124,6 +124,9 @@ export function createAgentToAgentPolicy(cfg: OpenClawConfig): AgentToAgentPolic
 }
 
 function actionPrefix(action: SessionAccessAction): string {
+  if (action === "close") {
+    return "Session close";
+  }
   if (action === "history") {
     return "Session history";
   }
@@ -134,6 +137,9 @@ function actionPrefix(action: SessionAccessAction): string {
 }
 
 function a2aDisabledMessage(action: SessionAccessAction): string {
+  if (action === "close") {
+    return "Agent-to-agent session close is disabled. Set tools.agentToAgent.enabled=true to allow cross-agent closes.";
+  }
   if (action === "history") {
     return "Agent-to-agent history is disabled. Set tools.agentToAgent.enabled=true to allow cross-agent access.";
   }
@@ -144,6 +150,9 @@ function a2aDisabledMessage(action: SessionAccessAction): string {
 }
 
 function a2aDeniedMessage(action: SessionAccessAction): string {
+  if (action === "close") {
+    return "Agent-to-agent session close denied by tools.agentToAgent.allow.";
+  }
   if (action === "history") {
     return "Agent-to-agent history denied by tools.agentToAgent.allow.";
   }
@@ -154,6 +163,9 @@ function a2aDeniedMessage(action: SessionAccessAction): string {
 }
 
 function crossVisibilityMessage(action: SessionAccessAction): string {
+  if (action === "close") {
+    return "Session close visibility is restricted. Set tools.sessions.visibility=all to allow cross-agent access.";
+  }
   if (action === "history") {
     return "Session history visibility is restricted. Set tools.sessions.visibility=all to allow cross-agent access.";
   }
