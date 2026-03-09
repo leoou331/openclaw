@@ -358,6 +358,63 @@ async function waitForSubagentOutputChange(params: {
   return latest;
 }
 
+async function waitForSubagentWorkflowOutputToSettle(params: {
+  sessionKey: string;
+  baselineReply: string;
+  maxWaitMs: number;
+}): Promise<{ reply: string; settled: boolean }> {
+  const initialBaseline = params.baselineReply.trim();
+  if (!initialBaseline) {
+    return { reply: params.baselineReply, settled: false };
+  }
+  const RETRY_INTERVAL_MS = FAST_TEST_MODE ? FAST_TEST_RETRY_INTERVAL_MS : 100;
+  const QUIET_WINDOW_MS = FAST_TEST_MODE ? FAST_TEST_REPLY_CHANGE_WAIT_MS : 500;
+  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 120_000));
+  let baseline = initialBaseline;
+  let latest = params.baselineReply;
+  let candidateStableSince: number | undefined;
+
+  while (Date.now() < deadline) {
+    const next = await readLatestSubagentOutput(params.sessionKey);
+    if (next?.trim()) {
+      latest = next;
+    }
+
+    let activeDescendants = 0;
+    try {
+      const { countActiveDescendantRuns } = await import("./subagent-registry.js");
+      activeDescendants = Math.max(0, countActiveDescendantRuns(params.sessionKey));
+    } catch {
+      // Best-effort only; when unavailable keep waiting for a bounded interval.
+    }
+
+    const latestTrimmed = latest.trim();
+    if (activeDescendants > 0) {
+      // Descendants are still active after the parent reply changed. Treat the
+      // current reply as an intermediate checkpoint and wait for a later update.
+      if (latestTrimmed) {
+        baseline = latestTrimmed;
+      }
+      candidateStableSince = undefined;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+      continue;
+    }
+
+    if (latestTrimmed && latestTrimmed !== baseline) {
+      candidateStableSince ??= Date.now();
+      if (Date.now() - candidateStableSince >= QUIET_WINDOW_MS) {
+        return { reply: latest, settled: true };
+      }
+    } else {
+      candidateStableSince = undefined;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+  }
+
+  return { reply: latest, settled: false };
+}
+
 function formatDurationShort(valueMs?: number) {
   if (!valueMs || !Number.isFinite(valueMs) || valueMs <= 0) {
     return "n/a";
@@ -1172,9 +1229,12 @@ export async function runSubagentAnnounceFlow(params: {
     let requesterDepth = getSubagentDepthFromSessionStore(targetRequesterSessionKey);
 
     let activeChildDescendantRuns = 0;
+    let childHasDescendantHistory = false;
     try {
-      const { countActiveDescendantRuns } = await import("./subagent-registry.js");
+      const { countActiveDescendantRuns, listDescendantRunsForRequester } =
+        await import("./subagent-registry.js");
       activeChildDescendantRuns = Math.max(0, countActiveDescendantRuns(params.childSessionKey));
+      childHasDescendantHistory = listDescendantRunsForRequester(params.childSessionKey).length > 0;
     } catch {
       // Best-effort only; fall back to direct announce behavior when unavailable.
     }
@@ -1183,6 +1243,19 @@ export async function runSubagentAnnounceFlow(params: {
       // this run until descendants settle so we avoid posting in-progress updates.
       shouldDeleteChildSession = false;
       return false;
+    }
+
+    if (childHasDescendantHistory && reply?.trim()) {
+      const settled = await waitForSubagentWorkflowOutputToSettle({
+        sessionKey: params.childSessionKey,
+        baselineReply: reply,
+        maxWaitMs: params.timeoutMs,
+      });
+      reply = settled.reply;
+      if (!settled.settled) {
+        shouldDeleteChildSession = false;
+        return false;
+      }
     }
 
     if (requesterDepth >= 1 && reply?.trim()) {

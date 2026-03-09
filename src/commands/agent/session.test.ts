@@ -111,7 +111,7 @@ describe("resolveSessionKeyForRequest", () => {
     expect(result.sessionStore["agent:mybot:main"]?.sessionId).toBe("target-session-id");
   });
 
-  it("returns undefined sessionKey when sessionId not found in any store", async () => {
+  it("synthesizes a canonical sessionKey when sessionId is new and no target is provided", async () => {
     setupMainAndMybotStorePaths();
     mocks.loadSessionStore.mockReturnValue({});
 
@@ -119,7 +119,19 @@ describe("resolveSessionKeyForRequest", () => {
       cfg: baseCfg,
       sessionId: "nonexistent-id",
     });
-    expect(result.sessionKey).toBeUndefined();
+    expect(result.sessionKey).toBe("agent:main:nonexistent-id");
+  });
+
+  it("keeps sender-derived routing when --to is provided and sessionId is new", async () => {
+    setupMainAndMybotStorePaths();
+    mocks.loadSessionStore.mockReturnValue({});
+
+    const result = resolveSessionKeyForRequest({
+      cfg: baseCfg,
+      to: "+15551234567",
+      sessionId: "nonexistent-id",
+    });
+    expect(result.sessionKey).toBe("agent:main:main");
   });
 
   it("does not search other stores when explicitSessionKey is set", async () => {

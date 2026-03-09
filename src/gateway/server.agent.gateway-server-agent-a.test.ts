@@ -215,6 +215,23 @@ describe("gateway server agent", () => {
     expect(call.to).toBeUndefined();
   });
 
+  test("agent synthesizes a canonical sessionKey for new explicit session ids", async () => {
+    setRegistry(defaultRegistry);
+    await setTestSessionStore({
+      entries: {},
+    });
+    const res = await rpcReq(ws, "agent", {
+      message: "hi",
+      sessionId: "explicit-main-session",
+      idempotencyKey: "idem-agent-explicit-session-id",
+    });
+    expect(res.ok).toBe(true);
+
+    const call = latestAgentCall();
+    expect(call.sessionKey).toBe("agent:main:explicit-main-session");
+    expect(call.sessionId).toBe("explicit-main-session");
+  });
+
   test("agent preserves spawnDepth on subagent sessions", async () => {
     setRegistry(defaultRegistry);
     await setTestSessionStore({

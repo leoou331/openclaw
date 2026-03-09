@@ -8,6 +8,7 @@ import {
   resolveAgentIdFromSessionKey,
   resolveExplicitAgentSessionKey,
   resolveAgentMainSessionKey,
+  resolveMainSessionKey,
   type SessionEntry,
   updateSessionStore,
 } from "../../config/sessions.js";
@@ -17,7 +18,11 @@ import {
   resolveAgentOutboundTarget,
 } from "../../infra/outbound/agent-delivery.js";
 import { resolveMessageChannelSelection } from "../../infra/outbound/channel-selection.js";
-import { classifySessionKeyShape, normalizeAgentId } from "../../routing/session-key.js";
+import {
+  classifySessionKeyShape,
+  normalizeAgentId,
+  toAgentStoreSessionKey,
+} from "../../routing/session-key.js";
 import { defaultRuntime } from "../../runtime.js";
 import { normalizeInputProvenance, type InputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
@@ -313,6 +318,14 @@ export const agentHandlers: GatewayRequestHandlers = {
       }
     }
     let resolvedSessionId = request.sessionId?.trim() || undefined;
+    if (!requestedSessionKey && resolvedSessionId && !request.to?.trim()) {
+      const defaultAgentId = resolveAgentIdFromSessionKey(resolveMainSessionKey(cfg));
+      requestedSessionKey = toAgentStoreSessionKey({
+        agentId: agentId ?? defaultAgentId,
+        requestKey: resolvedSessionId,
+        mainKey: cfg.session?.mainKey,
+      });
+    }
     let sessionEntry: SessionEntry | undefined;
     let bestEffortDeliver = requestedBestEffortDeliver ?? false;
     let cfgForAgent: ReturnType<typeof loadConfig> | undefined;
@@ -359,7 +372,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       const { cfg, storePath, entry, canonicalKey } = loadSessionEntry(requestedSessionKey);
       cfgForAgent = cfg;
       const now = Date.now();
-      const sessionId = entry?.sessionId ?? randomUUID();
+      const sessionId = entry?.sessionId ?? resolvedSessionId ?? randomUUID();
       const labelValue = request.label?.trim() || entry?.label;
       const sessionAgent = resolveAgentIdFromSessionKey(canonicalKey);
       spawnedByValue = canonicalizeSpawnedByForAgent(

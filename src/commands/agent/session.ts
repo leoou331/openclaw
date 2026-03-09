@@ -17,10 +17,11 @@ import {
   resolveSessionResetPolicy,
   resolveSessionResetType,
   resolveSessionKey,
+  resolveMainSessionKey,
   resolveStorePath,
   type SessionEntry,
 } from "../../config/sessions.js";
-import { normalizeMainKey } from "../../routing/session-key.js";
+import { normalizeMainKey, toAgentStoreSessionKey } from "../../routing/session-key.js";
 
 export type SessionResolution = {
   sessionId: string;
@@ -102,6 +103,16 @@ export function resolveSessionKeyForRequest(opts: {
         return { sessionKey: foundKey, sessionStore: altStore, storePath: altStorePath };
       }
     }
+  }
+
+  if (!sessionKey && opts.sessionId && !explicitSessionKey && !ctx) {
+    const defaultSessionKey = resolveMainSessionKey(opts.cfg);
+    const defaultAgentId = resolveAgentIdFromSessionKey(defaultSessionKey);
+    sessionKey = toAgentStoreSessionKey({
+      agentId: storeAgentId || defaultAgentId,
+      requestKey: opts.sessionId,
+      mainKey,
+    });
   }
 
   return { sessionKey, sessionStore, storePath };

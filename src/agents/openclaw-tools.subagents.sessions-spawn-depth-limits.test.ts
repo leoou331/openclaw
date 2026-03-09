@@ -2,7 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addSubagentRunForTests, resetSubagentRegistryForTests } from "./subagent-registry.js";
+import {
+  addSubagentRunForTests,
+  listSubagentRunsForRequester,
+  resetSubagentRegistryForTests,
+} from "./subagent-registry.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 
 const callGatewayMock = vi.fn();
@@ -104,11 +108,24 @@ describe("sessions_spawn depth + child limits", () => {
     });
   });
 
-  it("allows depth-1 callers when maxSpawnDepth is 2", async () => {
+  it("rejects depth-1 callers that omit agentId when maxSpawnDepth is 2", async () => {
     setSubagentLimits({ maxSpawnDepth: 2 });
 
     const tool = createSessionsSpawnTool({ agentSessionKey: "agent:main:subagent:parent" });
-    const result = await tool.execute("call-depth-allow", { task: "hello" });
+    const result = await tool.execute("call-depth-missing-agentid", { task: "hello" });
+
+    expect(result.details).toMatchObject({
+      status: "forbidden",
+      error: "sessions_spawn requires explicit agentId for nested subagent calls",
+    });
+    expect(callGatewayMock).not.toHaveBeenCalled();
+  });
+
+  it("allows depth-1 callers when maxSpawnDepth is 2 and agentId is explicit", async () => {
+    setSubagentLimits({ maxSpawnDepth: 2 });
+
+    const tool = createSessionsSpawnTool({ agentSessionKey: "agent:main:subagent:parent" });
+    const result = await tool.execute("call-depth-allow", { task: "hello", agentId: "main" });
 
     expect(result.details).toMatchObject({
       status: "accepted",
@@ -126,6 +143,35 @@ describe("sessions_spawn depth + child limits", () => {
       (entry) => entry.method === "sessions.patch" && entry.params?.spawnDepth === 2,
     );
     expect(spawnDepthPatch?.params?.key).toMatch(/^agent:main:subagent:/);
+  });
+
+  it("canonicalizes bare main session ids when registering requester ownership", async () => {
+    setSubagentLimits({ maxSpawnDepth: 2 });
+
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "cli-session-123",
+      requesterAgentIdOverride: "main",
+    });
+    const result = await tool.execute("call-main-sessionid-canonical", {
+      task: "hello",
+      agentId: "main",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "accepted",
+      childSessionKey: expect.stringMatching(/^agent:main:subagent:/),
+      runId: "run-depth",
+    });
+
+    const calls = callGatewayMock.mock.calls.map(
+      (call) => call[0] as { method?: string; params?: Record<string, unknown> },
+    );
+    const agentCall = calls.find((entry) => entry.method === "agent");
+    expect(agentCall?.params?.spawnedBy).toBe("agent:main:cli-session-123");
+
+    const registeredRuns = listSubagentRunsForRequester("agent:main:cli-session-123");
+    expect(registeredRuns).toHaveLength(1);
+    expect(registeredRuns[0]?.childSessionKey).toMatch(/^agent:main:subagent:/);
   });
 
   it("rejects depth-2 callers when maxSpawnDepth is 2 (using stored spawnDepth on flat keys)", async () => {
@@ -231,7 +277,10 @@ describe("sessions_spawn depth + child limits", () => {
     };
 
     const tool = createSessionsSpawnTool({ agentSessionKey: "agent:main:subagent:parent" });
-    const result = await tool.execute("call-max-concurrent-independent", { task: "hello" });
+    const result = await tool.execute("call-max-concurrent-independent", {
+      task: "hello",
+      agentId: "main",
+    });
 
     expect(result.details).toMatchObject({
       status: "accepted",

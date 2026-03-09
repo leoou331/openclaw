@@ -381,6 +381,20 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
   if (!beginSubagentCleanup(runId)) {
     return false;
   }
+  const hasDescendantHistory =
+    entry.expectsCompletionMessage === true &&
+    entry.lastAnnounceRetryAt == null &&
+    listDescendantRunsForRequesterFromRuns(subagentRuns, entry.childSessionKey).length > 0;
+  if (hasDescendantHistory) {
+    entry.lastAnnounceRetryAt = Date.now();
+    entry.cleanupHandled = false;
+    resumedRuns.delete(runId);
+    persistSubagentRuns();
+    setTimeout(() => {
+      resumeSubagentRun(runId);
+    }, MIN_ANNOUNCE_RETRY_DELAY_MS).unref?.();
+    return true;
+  }
   const requesterOrigin = normalizeDeliveryContext(entry.requesterOrigin);
   void runSubagentAnnounceFlow({
     childSessionKey: entry.childSessionKey,

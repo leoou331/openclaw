@@ -34,6 +34,9 @@ const embeddedRunMock = {
 const subagentRegistryMock = {
   isSubagentSessionRunActive: vi.fn(() => true),
   countActiveDescendantRuns: vi.fn((_sessionKey: string) => 0),
+  listDescendantRunsForRequester: vi.fn(
+    (_sessionKey: string) => [] as Array<Record<string, unknown>>,
+  ),
   resolveRequesterForChildSession: vi.fn((_sessionKey: string): RequesterResolution => null),
 };
 const subagentDeliveryTargetHookMock = vi.fn(
@@ -172,6 +175,7 @@ describe("subagent announce formatting", () => {
     embeddedRunMock.waitForEmbeddedPiRunEnd.mockClear().mockResolvedValue(true);
     subagentRegistryMock.isSubagentSessionRunActive.mockClear().mockReturnValue(true);
     subagentRegistryMock.countActiveDescendantRuns.mockClear().mockReturnValue(0);
+    subagentRegistryMock.listDescendantRunsForRequester.mockClear().mockReturnValue([]);
     subagentRegistryMock.resolveRequesterForChildSession.mockClear().mockReturnValue(null);
     hasSubagentDeliveryTargetHook = false;
     hookRunnerMock.hasHooks.mockClear();
@@ -1663,6 +1667,47 @@ describe("subagent announce formatting", () => {
     const msg = call?.params?.message ?? "";
     expect(msg).toContain("Final synthesized answer.");
     expect(msg).not.toContain("Waiting for child output...");
+  });
+
+  it("waits for final synthesized output before announcing orchestrated child completion to main", async () => {
+    const replies = [
+      "Phase 1 spawned successfully. Waiting for codex to complete...",
+      "Phase 1 spawned successfully. Waiting for codex to complete...",
+      "Phase 2 starting...",
+      "Phase 2 starting...",
+      "Final synthesized answer.",
+      "Final synthesized answer.",
+    ];
+    readLatestAssistantReplyMock.mockImplementation(
+      async () => replies.shift() ?? "Final synthesized answer.",
+    );
+    subagentRegistryMock.listDescendantRunsForRequester.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:parent" ? [{ runId: "run-child-1" }] : [],
+    );
+    let activeReads = 0;
+    subagentRegistryMock.countActiveDescendantRuns.mockImplementation((sessionKey: string) => {
+      if (sessionKey !== "agent:main:subagent:parent") {
+        return 0;
+      }
+      activeReads += 1;
+      return activeReads >= 3 && activeReads <= 4 ? 1 : 0;
+    });
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:parent",
+      childRunId: "run-parent-workflow",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      timeoutMs: 300,
+    });
+
+    expect(didAnnounce).toBe(true);
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
+    const msg = call?.params?.message ?? "";
+    expect(msg).toContain("Final synthesized answer.");
+    expect(msg).not.toContain("Phase 2 starting...");
+    expect(msg).not.toContain("Phase 1 spawned successfully.");
   });
 
   it("bubbles child announce to parent requester when requester subagent already ended", async () => {

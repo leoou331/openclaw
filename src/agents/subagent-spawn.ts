@@ -8,6 +8,7 @@ import {
   isCronSessionKey,
   normalizeAgentId,
   parseAgentSessionKey,
+  toAgentStoreSessionKey,
 } from "../routing/session-key.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resolveAgentConfig } from "./agent-scope.js";
@@ -227,6 +228,14 @@ export async function spawnSubagentDirect(
     alias,
     mainKey,
   });
+  const requesterAgentId = normalizeAgentId(
+    ctx.requesterAgentIdOverride ?? parseAgentSessionKey(requesterInternalKey)?.agentId,
+  );
+  const requesterStoreKey = toAgentStoreSessionKey({
+    agentId: requesterAgentId,
+    requestKey: requesterInternalKey,
+    mainKey,
+  });
 
   const callerDepth = getSubagentDepthFromSessionStore(requesterInternalKey, { cfg });
   const maxSpawnDepth =
@@ -239,7 +248,7 @@ export async function spawnSubagentDirect(
   }
 
   const maxChildren = cfg.agents?.defaults?.subagents?.maxChildrenPerAgent ?? 5;
-  const activeChildren = countActiveRunsForSession(requesterInternalKey);
+  const activeChildren = countActiveRunsForSession(requesterStoreKey);
   if (activeChildren >= maxChildren) {
     return {
       status: "forbidden",
@@ -247,9 +256,14 @@ export async function spawnSubagentDirect(
     };
   }
 
-  const requesterAgentId = normalizeAgentId(
-    ctx.requesterAgentIdOverride ?? parseAgentSessionKey(requesterInternalKey)?.agentId,
-  );
+  // Nested subagents must name their next worker explicitly; defaulting back to the
+  // requester agent creates silent self-recursion (for example orchestrator -> orchestrator).
+  if (callerDepth >= 1 && !requestedAgentId) {
+    return {
+      status: "forbidden",
+      error: "sessions_spawn requires explicit agentId for nested subagent calls",
+    };
+  }
   const targetAgentId = requestedAgentId ? normalizeAgentId(requestedAgentId) : requesterAgentId;
   if (targetAgentId !== requesterAgentId) {
     const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
@@ -270,7 +284,7 @@ export async function spawnSubagentDirect(
   }
   const childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
   const childDepth = callerDepth + 1;
-  const spawnedByKey = requesterInternalKey;
+  const spawnedByKey = requesterStoreKey;
   const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
   const resolvedModel = resolveSubagentSpawnModelSelection({
     cfg,
@@ -488,7 +502,7 @@ export async function spawnSubagentDirect(
   registerSubagentRun({
     runId: childRunId,
     childSessionKey,
-    requesterSessionKey: requesterInternalKey,
+    requesterSessionKey: requesterStoreKey,
     requesterOrigin,
     requesterDisplayKey,
     task,
