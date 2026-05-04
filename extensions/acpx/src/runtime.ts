@@ -201,6 +201,10 @@ function isCodexAcpPackageSpec(value: string): boolean {
   return /^@zed-industries\/codex-acp(?:@.+)?$/i.test(value.trim());
 }
 
+// Accepts both the direct `codex-acp` bin and user-provided wrappers such as
+// `codexcli-acp` that `exec` the real binary with extra `-c` flags. Wrapper
+// scripts are common for sandboxing or per-profile config and must still hit
+// the Codex branch of `setConfigOption` so the `timeout` short-circuit fires.
 function isCodexAcpCommand(command: string | undefined): boolean {
   if (!command) {
     return false;
@@ -213,14 +217,48 @@ function isCodexAcpCommand(command: string | undefined): boolean {
     return true;
   }
   const commandName = basename(parts[0] ?? "");
-  if (/^codex-acp(?:\.exe)?$/i.test(commandName)) {
+  if (/^codex(?:cli)?-acp(?:\.exe)?$/i.test(commandName)) {
     return true;
   }
   if (commandName !== "node") {
     return false;
   }
   const scriptName = basename(parts[1] ?? "");
-  return /^codex-acp(?:-wrapper)?(?:\.[cm]?js)?$/i.test(scriptName);
+  return /^codex(?:cli)?-acp(?:-wrapper)?(?:\.[cm]?js)?$/i.test(scriptName);
+}
+
+function isClaudeAcpPackageSpec(value: string): boolean {
+  // Matches both the historical `@zed-industries/claude-agent-acp` scope and
+  // the current `@agentclientprotocol/claude-agent-acp` scope, with or without
+  // a pinned version suffix.
+  return /^@(?:zed-industries|agentclientprotocol)\/claude-agent-acp(?:@.+)?$/i.test(
+    value.trim(),
+  );
+}
+
+// Mirrors `isCodexAcpCommand`. Matches direct `claude-agent-acp` bin as well
+// as common wrapper script names (e.g. `claude-agent-acp-wrapper.js`) so user
+// wrappers still hit the Claude branch in `setConfigOption`.
+function isClaudeAcpCommand(command: string | undefined): boolean {
+  if (!command) {
+    return false;
+  }
+  const parts = unwrapEnvCommand(splitCommandParts(command.trim()));
+  if (!parts.length) {
+    return false;
+  }
+  if (parts.some(isClaudeAcpPackageSpec)) {
+    return true;
+  }
+  const commandName = basename(parts[0] ?? "");
+  if (/^claude-agent-acp(?:\.exe)?$/i.test(commandName)) {
+    return true;
+  }
+  if (commandName !== "node") {
+    return false;
+  }
+  const scriptName = basename(parts[1] ?? "");
+  return /^claude-agent-acp(?:-wrapper)?(?:\.[cm]?js)?$/i.test(scriptName);
 }
 
 function failUnsupportedCodexAcpModel(rawModel: string, detail?: string): never {
@@ -531,6 +569,19 @@ export class AcpxRuntime implements AcpRuntime {
     const delegate = await this.resolveDelegateForHandle(input.handle);
     const command = await this.resolveCommandForHandle(input.handle);
     const key = input.key.trim().toLowerCase();
+    // `@agentclientprotocol/claude-agent-acp` only accepts `mode`, `model`,
+    // and `effort` in `session/set_config_option`. Any other `configId`
+    // throws `Unknown config option: <id>` (JSON-RPC -32603), which the
+    // embedded runtime treats as a turn failure and tears the session down.
+    // The acpx plugin unconditionally pushes a `timeout` config option into
+    // each new session from its own built-in defaults, so every Claude ACP
+    // session crashes on first turn. Short-circuit the unsupported key here,
+    // matching the existing Codex behavior below.
+    if (isClaudeAcpCommand(command)) {
+      if (key === "timeout" || key === "timeout_seconds") {
+        return;
+      }
+    }
     if (isCodexAcpCommand(command)) {
       if (key === "timeout" || key === "timeout_seconds") {
         return;
@@ -606,6 +657,7 @@ export const __testing = {
   appendCodexAcpConfigOverrides,
   assertSupportedRuntimeSessionMode,
   codexAcpSessionModelId,
+  isClaudeAcpCommand,
   isCodexAcpCommand,
   normalizeCodexAcpModelOverride,
 };
